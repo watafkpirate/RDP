@@ -1,37 +1,38 @@
-name: Cloud Browser RDP
+name: Cloudflare Free Desktop
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Instalace Desktopu a VNC
+      - name: 1. Instalace Desktopu a VNC
         run: |
           sudo apt update
-          sudo apt install -y xfce4 xfce4-goodies tightvncserver websockify
+          sudo apt install -y xfce4 xfce4-goodies tightvncserver websockify novnc
           mkdir ~/.vnc
           echo "heslo123" | vncpasswd -f > ~/.vnc/passwd
           chmod 600 ~/.vnc/passwd
-          
-      - name: Instalace prohlížeče
-        run: |
-          sudo apt install -y firefox
-          
-      - name: Nastavení Ngrok
-        run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update && sudo apt install ngrok
-          ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Start VNC a Tunnelu
+      - name: 2. Start VNC a Cloudflare Tunelu
         run: |
+          # Spuštění plochy
           vncserver :1 -geometry 1280x720 -depth 24
-          # Spuštění websockify pro přístup přes prohlížeč (noVNC)
+          # Most pro prohlížeč (noVNC)
           websockify --web /usr/share/novnc/ 6080 localhost:5901 &
-          ngrok http 6080 --log=stdout &
-          sleep 10
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'
           
-      - name: Keep Alive
-        run: sleep 21600 # Poběží to 6 hodin
+          # Instalace Cloudflare bez registrace
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared-linux-amd64
+          
+          # Spuštění tunelu a uložení logu, abychom viděli URL
+          ./cloudflared-linux-amd64 tunnel --url http://localhost:6080 > cf.log 2>&1 &
+          
+          echo "Čekám na vygenerování linku..."
+          sleep 20
+          echo "-------------------------------------------------------"
+          echo "TVŮJ LINK PRO XBOX / TV JE ZDE:"
+          grep -o 'https://[-0-9a-z]*\.trycloudflare\.com' cf.log
+          echo "-------------------------------------------------------"
+
+      - name: 3. Udržet naživu (6 hodin)
+        run: sleep 21600
