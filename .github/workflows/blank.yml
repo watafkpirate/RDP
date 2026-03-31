@@ -1,40 +1,36 @@
-name: Cloud Video Streamer FIX
+name: Neko Smooth Streamer
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Instalace KasmVNC a Desktopu
+      - name: 1. Spuštění Neko (WebRTC Browser)
         run: |
-          sudo apt update
-          wget https://github.com/kasmtech/KasmVNC/releases/download/v1.3.1/kasmvncserver_bookworm_1.3.1_amd64.deb
-          sudo apt install -y ./kasmvncserver_bookworm_1.3.1_amd64.deb
-          sudo apt install -y xfce4 xfce4-goodies firefox
+          # Spustíme Neko v Dockeru - je to v podstatě hotový "Watch Party" server
+          docker run -d \
+            --name neko \
+            -p 8080:8080 \
+            -p 52000-52100:52000-52100/udp \
+            -e NEKO_PASSWORD=heslo123 \
+            -e NEKO_ADMIN_PASSWORD=admin123 \
+            -e NEKO_SCREEN=1280x720@30 \
+            m1k1o/neko:firefox
           
-      - name: 2. Konfigurace KasmVNC (Bezpečné heslo)
+      - name: 2. Instalace a start Cloudflare Tunelu
         run: |
-          mkdir -p ~/.vnc
-          # KasmVNC používá yaml pro uživatele
-          echo "kasmuid:
-            password: $(openssl passwd -1 heslo123)
-            permissions: [all]" > ~/.vnc/kasmvncuser.yaml
-
-      - name: 3. Start KasmVNC a Tunelu
-        run: |
-          # Start serveru na portu 8443
-          vncserver :1 -select-de xfce -Resolution 1280x720 -interface 127.0.0.1 -websocketport 8443 &
-          
-          # Cloudflare Tunel
           wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared-linux-amd64
-          ./cloudflared-linux-amd64 tunnel --url http://localhost:8443 > cf.log 2>&1 &
+          
+          # Tunelujeme port 8080, kde běží Neko rozhraní
+          ./cloudflared-linux-amd64 tunnel --url http://localhost:8080 > cf.log 2>&1 &
           
           sleep 20
           echo "-------------------------------------------------------"
-          echo "ODKAZ PRO PLYNULÉ VIDEO (Přihlášení: kasmuid / heslo123):"
+          echo "ODKAZ PRO PLYNULÉ VIDEO (Neko WebRTC):"
           grep -o 'https://[-0-9a-z]*\.trycloudflare\.com' cf.log
           echo "-------------------------------------------------------"
+          echo "Heslo do místnosti: heslo123"
 
-      - name: 4. Keep Alive
+      - name: 3. Keep Alive
         run: sleep 21600
