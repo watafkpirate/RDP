@@ -1,36 +1,37 @@
-# This is a basic workflow to help you get started with Actions
+name: Cloud Browser RDP
+on: workflow_dispatch
 
-name: CI
-
-# Controls when the workflow will run
-on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
-
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Instalace Desktopu a VNC
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          sudo apt update
+          sudo apt install -y xfce4 xfce4-goodies tightvncserver websockify
+          mkdir ~/.vnc
+          echo "heslo123" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+          
+      - name: Instalace prohlížeče
+        run: |
+          sudo apt install -y firefox
+          
+      - name: Nastavení Ngrok
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install ngrok
+          ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+
+      - name: Start VNC a Tunnelu
+        run: |
+          vncserver :1 -geometry 1280x720 -depth 24
+          # Spuštění websockify pro přístup přes prohlížeč (noVNC)
+          websockify --web /usr/share/novnc/ 6080 localhost:5901 &
+          ngrok http 6080 --log=stdout &
+          sleep 10
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url'
+          
+      - name: Keep Alive
+        run: sleep 21600 # Poběží to 6 hodin
