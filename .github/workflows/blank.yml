@@ -1,38 +1,40 @@
-name: Cloudflare Free Desktop
+name: Cloud Video Streamer
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Instalace Desktopu a VNC
+      - name: 1. Instalace KasmVNC (Video-specialista)
         run: |
           sudo apt update
-          sudo apt install -y xfce4 xfce4-goodies tightvncserver websockify novnc
-          mkdir ~/.vnc
+          # Stáhneme přímo balíček KasmVNC pro Ubuntu
+          wget https://github.com/kasmtech/KasmVNC/releases/download/v1.3.1/kasmvncserver_bookworm_1.3.1_amd64.deb
+          sudo apt install -y ./kasmvncserver_bookworm_1.3.1_amd64.deb
+          
+          # Nastavení uživatele
+          mkdir -p ~/.vnc
           echo "heslo123" | vncpasswd -f > ~/.vnc/passwd
           chmod 600 ~/.vnc/passwd
-
-      - name: 2. Start VNC a Cloudflare Tunelu
-        run: |
-          # Spuštění plochy
-          vncserver :1 -geometry 1280x720 -depth 24
-          # Most pro prohlížeč (noVNC)
-          websockify --web /usr/share/novnc/ 6080 localhost:5901 &
           
-          # Instalace Cloudflare bez registrace
+          # Instalace lehkého desktopu a prohlížeče
+          sudo apt install -y xfce4 xfce4-goodies firefox
+
+      - name: 2. Start KasmVNC s optimalizací pro Video
+        run: |
+          # KasmVNC běží nativně na portu 8443 a streamuje video
+          vncserver :1 -select-de xfce -Resolution 1280x720 -interface 127.0.0.1 -websocketport 8443 &
+          
+          # Tunel pro port 8443
           wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x cloudflared-linux-amd64
+          ./cloudflared-linux-amd64 tunnel --url http://localhost:8443 > cf.log 2>&1 &
           
-          # Spuštění tunelu a uložení logu, abychom viděli URL
-          ./cloudflared-linux-amd64 tunnel --url http://localhost:6080 > cf.log 2>&1 &
-          
-          echo "Čekám na vygenerování linku..."
           sleep 20
           echo "-------------------------------------------------------"
-          echo "TVŮJ LINK PRO XBOX / TV JE ZDE:"
+          echo "ODKAZ PRO PLYNULÉ VIDEO:"
           grep -o 'https://[-0-9a-z]*\.trycloudflare\.com' cf.log
           echo "-------------------------------------------------------"
 
-      - name: 3. Udržet naživu (6 hodin)
+      - name: 3. Keep Alive
         run: sleep 21600
